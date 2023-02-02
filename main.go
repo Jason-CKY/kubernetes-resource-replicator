@@ -59,15 +59,22 @@ func main() {
 	if err != nil {
 		panic(err.Error())
 	}
-	// for {
-	pods, err := clientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{})
+
+	secrets, err := clientset.CoreV1().Secrets("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		panic(err.Error())
 	}
-	fmt.Printf("There are %d pods in the cluster\n", len(pods.Items))
 
-	for i := 0; i < len(pods.Items); i++ {
-		fmt.Println(pods.Items[i].Name)
+	fmt.Printf("There are %d secrets in the cluster\n", len(secrets.Items))
+
+	for i := 0; i < len(secrets.Items); i++ {
+		value, exists := secrets.Items[i].Annotations["kubectl.kubernetes.io/last-applied-configuration"]
+		if exists {
+			fmt.Printf("%v \t", secrets.Items[i].Name)
+			fmt.Println(value)
+			fmt.Println(secrets.Items[i].Annotations)
+		}
+
 	}
 	// Examples for error handling:
 	// - Use helper functions like e.g. errors.IsNotFound()
@@ -86,6 +93,5 @@ func main() {
 		fmt.Printf("Found pod %s in namespace %s\n", pod, namespace)
 	}
 
-	time.Sleep(10 * time.Second)
-	// }
+	time.Sleep(1 * time.Second)
 }
