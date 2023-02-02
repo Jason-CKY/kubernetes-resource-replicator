@@ -67,7 +67,10 @@ func main() {
 		for i := 0; i < len(secrets.Items); i++ {
 			log.Infof("Name: %v", secrets.Items[i].Name)
 			log.Info(secrets.Items[i].Annotations)
-			//TODO:
+			//TODO: loop through each namespace that should be replicated to
+			// 		and check if secret has been created
+			//		create the secret if it does not exist,
+			//		update the secret if it exist and is not the same value
 		}
 
 		time.Sleep(configLoopDuration)
