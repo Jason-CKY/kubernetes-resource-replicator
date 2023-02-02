@@ -1,14 +1,11 @@
 package main
 
 import (
-	"context"
 	"flag"
-	"fmt"
 	"path/filepath"
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
@@ -45,7 +42,8 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	}
 	log.SetFormatter(&log.TextFormatter{
-		FullTimestamp: true,
+		FullTimestamp:          true,
+		DisableLevelTruncation: true,
 	})
 
 	log.Info("Application started")
@@ -63,21 +61,12 @@ func main() {
 	}
 
 	for {
-		secrets, err := clientset.CoreV1().Secrets("").List(context.TODO(), metav1.ListOptions{})
-		if err != nil {
-			panic(err.Error())
-		}
-
-		fmt.Printf("There are %d secrets in the cluster\n", len(secrets.Items))
+		secrets := getAllSourceSecrets(clientset)
+		log.Debugf("There are %d secrets with the relevant annotations in the cluster", len(secrets.Items))
 
 		for i := 0; i < len(secrets.Items); i++ {
-			value, exists := secrets.Items[i].Annotations["kubectl.kubernetes.io/last-applied-configuration"]
-			if exists {
-				fmt.Printf("%v \t", secrets.Items[i].Name)
-				fmt.Println(value)
-				fmt.Println(secrets.Items[i].Annotations)
-			}
-
+			log.Infof("Name: %v", secrets.Items[i].Name)
+			log.Info(secrets.Items[i].Annotations)
 		}
 
 		time.Sleep(configLoopDuration)
