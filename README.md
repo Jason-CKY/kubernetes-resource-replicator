@@ -14,6 +14,7 @@ Below is a table of available configurations:
 | Config name          | ENV     | Default Value | Description |
 |--------------|-----------|------------|---------|
 | loop duration | CONFIG_LOOP_DURATION      | 10s        | duration string which defines how often namespaces are checked, see https://golang.org/pkg/time/#ParseDuration for more examples
+| debug logs | CONFIG_DEBUG      | false        | show debug logs
 
 
 ## Usage

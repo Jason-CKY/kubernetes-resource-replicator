@@ -3,6 +3,7 @@ module github.com/Jason-CKY/kubernetes-resource-replicator
 go 1.19
 
 require (
+	github.com/sirupsen/logrus v1.9.0
 	k8s.io/apimachinery v0.26.1
 	k8s.io/client-go v0.26.1
 )
