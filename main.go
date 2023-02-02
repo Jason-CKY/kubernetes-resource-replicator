@@ -67,6 +67,7 @@ func main() {
 		for i := 0; i < len(secrets.Items); i++ {
 			log.Infof("Name: %v", secrets.Items[i].Name)
 			log.Info(secrets.Items[i].Annotations)
+			//TODO:
 		}
 
 		time.Sleep(configLoopDuration)
