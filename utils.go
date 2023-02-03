@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -41,7 +42,18 @@ func getAllNamespaces(clientSet *kubernetes.Clientset) *v1.NamespaceList {
 		panic(err.Error())
 	}
 	return namespaces
+}
 
+func getAllRegexNamespaces(clientSet *kubernetes.Clientset, pattern string) *v1.NamespaceList {
+	// TODO: match with regex
+	namespaces, err := clientSet.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		panic(err.Error())
+	}
+	for index, namespace := range namespaces.Items {
+		log.Infof("%v at index %v", namespace.Name, index)
+	}
+	return namespaces
 }
 
 func copyAnnotations(annotation map[string]string) map[string]string {
