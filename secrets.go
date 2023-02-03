@@ -13,7 +13,7 @@ import (
 )
 
 // list all secrets and filter by annotation
-// return all secrets with the `resource-replicator/replicate-to` or `resource-replicator/all-namespaces` annotation
+// return all secrets with the REPLICATE_REGEX or REPLICATE_ALL_NAMESPACES annotation
 func getAllSourceSecrets(clientSet *kubernetes.Clientset) *v1.SecretList {
 	allSecrets, err := clientSet.CoreV1().Secrets("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
@@ -24,6 +24,24 @@ func getAllSourceSecrets(clientSet *kubernetes.Clientset) *v1.SecretList {
 	for i := 0; i < len(allSecrets.Items); i++ {
 		secret := allSecrets.Items[i]
 		if metav1.HasAnnotation(secret.ObjectMeta, REPLICATE_REGEX) || metav1.HasAnnotation(secret.ObjectMeta, REPLICATE_ALL_NAMESPACES) {
+			secrets.Items = append(secrets.Items, secret)
+		}
+	}
+	return &secrets
+}
+
+// list all secrets and filter by annotation
+// return all secrets with the REPLICATED_ANNOTATION annotation
+func getAllReplicatedSecrets(clientSet *kubernetes.Clientset) *v1.SecretList {
+	allSecrets, err := clientSet.CoreV1().Secrets("").List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		panic(err.Error())
+	}
+	secrets := v1.SecretList{}
+
+	for i := 0; i < len(allSecrets.Items); i++ {
+		secret := allSecrets.Items[i]
+		if metav1.HasAnnotation(secret.ObjectMeta, REPLICATED_ANNOTATION) {
 			secrets.Items = append(secrets.Items, secret)
 		}
 	}
@@ -105,4 +123,12 @@ func stripAllReplicatorAnnotations(annotation map[string]string) map[string]stri
 	delete(copied_annotation, REPLICATE_ALL_NAMESPACES)
 	delete(copied_annotation, LAST_APPLIED_CONFIGURATION)
 	return copied_annotation
+}
+
+func deleteSecret(clientSet *kubernetes.Clientset, secret v1.Secret) {
+	log.Infof("Deleting secret %v in namespace %v...", secret.Name, secret.Namespace)
+	err := clientSet.CoreV1().Secrets(secret.Namespace).Delete(context.TODO(), secret.Name, metav1.DeleteOptions{})
+	if err != nil {
+		panic(err.Error())
+	}
 }

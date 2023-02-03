@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"path/filepath"
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/errors"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
@@ -13,7 +16,7 @@ import (
 
 var (
 	// Config
-	configDebug        bool          = true
+	configDebug        bool          = false
 	configLoopDuration time.Duration = 10 * time.Second
 )
 
@@ -83,7 +86,34 @@ func replicateSecrets(clientSet *kubernetes.Clientset) {
 	}
 }
 
-// TODO: delete secrets that does not have a source anymore
+// Delete secrets that does not have a source anymore
 func deleteOrphanedSecrets(clientSet *kubernetes.Clientset) {
+	// find all secrets with REPLICATED_ANNOTATION annotation, check if source namespace with same name secret exists,
+	// and delete secret if does not exist
 
+	// map to hold if secret still exists in source namespace, to prevent unnecessary api calls to kubernetes
+	secretExistMapping := make(map[string]bool)
+	replicatedSecrets := getAllReplicatedSecrets(clientSet)
+	for i := 0; i < len(replicatedSecrets.Items); i++ {
+		replicatedSecret := replicatedSecrets.Items[i]
+		if secretExists, ok := secretExistMapping[replicatedSecret.Name]; ok {
+			if !secretExists {
+				deleteSecret(clientSet, replicatedSecret)
+			}
+		} else {
+			// check if secret exists
+			_, err := clientSet.CoreV1().Secrets(replicatedSecret.Annotations[REPLICATED_ANNOTATION]).Get(context.TODO(), replicatedSecret.Name, v1.GetOptions{})
+			if err != nil {
+				if errors.IsNotFound(err) {
+					secretExistMapping[replicatedSecret.Name] = false
+					deleteSecret(clientSet, replicatedSecret)
+				} else {
+					panic(err.Error())
+				}
+			} else {
+				secretExistMapping[replicatedSecret.Name] = true
+			}
+		}
+
+	}
 }
