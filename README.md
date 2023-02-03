@@ -50,3 +50,7 @@ metadata:
 data:
   key1: <value>
 ```
+
+### Cleaning up abandoned resource
+
+Once the source resource has been deleted, all the replicated resources will also be cleaned up by this process.
