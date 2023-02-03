@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/go-cmp/cmp"
 	log "github.com/sirupsen/logrus"
@@ -54,15 +55,18 @@ func getReplicateNamespaces(clientSet *kubernetes.Clientset, obj metav1.ObjectMe
 	if metav1.HasAnnotation(obj, REPLICATE_REGEX) {
 		// evaluate the regex on the namespace
 		// append the names of the matched namespaces to output
-		namespaces := getAllRegexNamespaces(clientSet, obj.Annotations[REPLICATE_REGEX])
-		for i := 0; i < len(namespaces); i++ {
-			output = append(output, namespaces[i].Name)
+		patterns := strings.Split(obj.Annotations[REPLICATE_REGEX], ",")
+		for _, pattern := range patterns {
+			namespaces := getAllRegexNamespaces(clientSet, pattern)
+			for _, namespace := range namespaces {
+				output = append(output, namespace.Name)
+			}
 		}
 	} else if metav1.HasAnnotation(obj, REPLICATE_ALL_NAMESPACES) {
 		// set output to all namespaces
 		namespaces := getAllNamespaces(clientSet)
-		for i := 0; i < len(namespaces.Items); i++ {
-			output = append(output, namespaces.Items[i].Name)
+		for _, namespace := range namespaces.Items {
+			output = append(output, namespace.Name)
 		}
 	} else {
 		return output, fmt.Errorf("neither %v or %v annotation found in resource", REPLICATE_REGEX, REPLICATE_ALL_NAMESPACES)

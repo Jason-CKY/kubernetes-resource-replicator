@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"path/filepath"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -76,10 +77,16 @@ func main() {
 	}
 
 	for {
+		log.Infof("Checking...")
 		replicateSecrets(clientSet)
 		deleteOrphanedSecrets(clientSet)
 		time.Sleep(configLoopDuration)
 	}
+}
+
+func processSecrets(clientSet *kubernetes.Clientset) {
+	//TODO: taking >10s per loop to process, optimize it by
+	// only querying once for the list of source secrets, replicated secrets, and namespaces to be replicated to
 }
 
 func replicateSecrets(clientSet *kubernetes.Clientset) {
@@ -106,8 +113,7 @@ func deleteOrphanedSecrets(clientSet *kubernetes.Clientset) {
 	// map to hold if secret still exists in source namespace, to prevent unnecessary api calls to kubernetes
 	secretExistMapping := make(map[string]bool)
 	replicatedSecrets := getAllReplicatedSecrets(clientSet)
-	for i := 0; i < len(replicatedSecrets.Items); i++ {
-		replicatedSecret := replicatedSecrets.Items[i]
+	for _, replicatedSecret := range replicatedSecrets.Items {
 		if secretExists, ok := secretExistMapping[replicatedSecret.Name]; ok {
 			if !secretExists {
 				deleteSecret(clientSet, replicatedSecret)
@@ -124,6 +130,30 @@ func deleteOrphanedSecrets(clientSet *kubernetes.Clientset) {
 				}
 			} else {
 				secretExistMapping[replicatedSecret.Name] = true
+			}
+		}
+		if secretExistMapping[replicatedSecret.Name] {
+			// check if annotations has changed to not include this current namespace anymore
+			// this is only relevant for regex replication as the annotations may be changed to no longer fit
+			// the current replica's namespace
+			originalSecret, err := clientSet.CoreV1().Secrets(replicatedSecret.Annotations[REPLICATED_ANNOTATION]).Get(context.TODO(), replicatedSecret.Name, v1.GetOptions{})
+			if err != nil {
+				panic(err.Error())
+			}
+			if v1.HasAnnotation(originalSecret.ObjectMeta, REPLICATE_REGEX) {
+				deleteReplica := true
+				patterns := strings.Split(originalSecret.Annotations[REPLICATE_REGEX], ",")
+				for _, pattern := range patterns {
+					namespaces := getAllRegexNamespaces(clientSet, pattern)
+					for _, namespace := range namespaces {
+						if replicatedSecret.Namespace == namespace.Name {
+							deleteReplica = false
+						}
+					}
+				}
+				if deleteReplica {
+					deleteSecret(clientSet, replicatedSecret)
+				}
 			}
 		}
 	}

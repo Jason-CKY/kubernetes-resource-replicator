@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -58,7 +57,7 @@ func getAllRegexNamespaces(clientSet *kubernetes.Clientset, pattern string) []v1
 			panic(err.Error())
 		}
 		if matched {
-			log.Debugf("pattern=%v matched namespace=%v", pattern, namespace.Name)
+			// log.Debugf("pattern=%v matched namespace=%v", pattern, namespace.Name)
 			matchedNamespaces = append(matchedNamespaces, namespace)
 		}
 	}

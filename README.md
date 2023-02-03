@@ -53,4 +53,33 @@ data:
 
 ### Cleaning up abandoned resource
 
-Once the source resource has been deleted, all the replicated resources will also be cleaned up by this process.
+Once the source resource has been deleted, all the replicated resources will also be cleaned up by this process. 
+
+Updating the source resource's replication annotation will also update the replicated resource.
+Example:
+
+Updating
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  annotations:
+    resource-replicator/replicate-to: "my-ns-1,namespace-[0-9]*"
+data:
+  key1: <value>
+```
+
+to
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  annotations:
+    resource-replicator/replicate-to: "namespace-[0-9]*"
+data:
+  key1: <value>
+```
+
+will cause the secret in `my-ns-1` to be removed.
