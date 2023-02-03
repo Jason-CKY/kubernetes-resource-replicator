@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -44,16 +45,24 @@ func getAllNamespaces(clientSet *kubernetes.Clientset) *v1.NamespaceList {
 	return namespaces
 }
 
-func getAllRegexNamespaces(clientSet *kubernetes.Clientset, pattern string) *v1.NamespaceList {
-	// TODO: match with regex
+func getAllRegexNamespaces(clientSet *kubernetes.Clientset, pattern string) []v1.Namespace {
+	// match with regex
+	matchedNamespaces := make([]v1.Namespace, 0, 10)
 	namespaces, err := clientSet.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		panic(err.Error())
 	}
-	for index, namespace := range namespaces.Items {
-		log.Infof("%v at index %v", namespace.Name, index)
+	for _, namespace := range namespaces.Items {
+		matched, err := regexp.MatchString(pattern, namespace.Name)
+		if err != nil {
+			panic(err.Error())
+		}
+		if matched {
+			log.Debugf("pattern=%v matched namespace=%v", pattern, namespace.Name)
+			matchedNamespaces = append(matchedNamespaces, namespace)
+		}
 	}
-	return namespaces
+	return matchedNamespaces
 }
 
 func copyAnnotations(annotation map[string]string) map[string]string {

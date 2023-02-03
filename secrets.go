@@ -52,9 +52,12 @@ func getAllReplicatedSecrets(clientSet *kubernetes.Clientset) *v1.SecretList {
 func getReplicateNamespaces(clientSet *kubernetes.Clientset, obj metav1.ObjectMeta) ([]string, error) {
 	output := make([]string, 0, 10)
 	if metav1.HasAnnotation(obj, REPLICATE_REGEX) {
-		// TODO: evaluate the regex on the namespace
-		// TODO: append the names of the matched namespaces to output
-		fmt.Println(REPLICATE_REGEX)
+		// evaluate the regex on the namespace
+		// append the names of the matched namespaces to output
+		namespaces := getAllRegexNamespaces(clientSet, obj.Annotations[REPLICATE_REGEX])
+		for i := 0; i < len(namespaces); i++ {
+			output = append(output, namespaces[i].Name)
+		}
 	} else if metav1.HasAnnotation(obj, REPLICATE_ALL_NAMESPACES) {
 		// set output to all namespaces
 		namespaces := getAllNamespaces(clientSet)

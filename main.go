@@ -32,6 +32,7 @@ func getKubernetesConfig() *rest.Config {
 	var config *rest.Config
 	if home := homedir.HomeDir(); home != "" {
 		kubeconfig := filepath.Join(home, ".kube", "config")
+		log.Infof("Using kubeconfig file at %v", kubeconfig)
 		// use the current context in kubeconfig
 		_config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
@@ -39,6 +40,7 @@ func getKubernetesConfig() *rest.Config {
 		}
 		config = _config
 	} else {
+		log.Infof("Using incluster config...")
 		_config, err := rest.InClusterConfig()
 		if err != nil {
 			panic(err.Error())
