@@ -100,10 +100,9 @@ func replicateSecrets(clientSet *kubernetes.Clientset) {
 }
 
 // Delete secrets that does not have a source anymore
+// find all secrets with REPLICATED_ANNOTATION annotation, check if source namespace with same name secret exists,
+// and delete secret if does not exist
 func deleteOrphanedSecrets(clientSet *kubernetes.Clientset) {
-	// find all secrets with REPLICATED_ANNOTATION annotation, check if source namespace with same name secret exists,
-	// and delete secret if does not exist
-
 	// map to hold if secret still exists in source namespace, to prevent unnecessary api calls to kubernetes
 	secretExistMapping := make(map[string]bool)
 	replicatedSecrets := getAllReplicatedSecrets(clientSet)
@@ -127,6 +126,5 @@ func deleteOrphanedSecrets(clientSet *kubernetes.Clientset) {
 				secretExistMapping[replicatedSecret.Name] = true
 			}
 		}
-
 	}
 }
