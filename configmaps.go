@@ -149,7 +149,7 @@ func replicateConfigmapToNamespace(clientSet *kubernetes.Clientset, configmap v1
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Create configmap if it does not exist
-			log.Infof("Replicating [resource=configmap][ns=%v][name=%v] to %v namespace...\n", configmap.Namespace, configmap.Name, namespace)
+			log.Infof("Replicating [resource=configmap][ns=%v][name=%v] to %v namespace...", configmap.Namespace, configmap.Name, namespace)
 			_, err := clientSet.CoreV1().ConfigMaps(namespace).Create(context.TODO(), copied_configmap, metav1.CreateOptions{})
 			if err != nil {
 				panic(err.Error())
@@ -166,7 +166,7 @@ func replicateConfigmapToNamespace(clientSet *kubernetes.Clientset, configmap v1
 			updated_configmap.Annotations = copied_configmap.Annotations
 			updated_configmap.Data = copied_configmap.Data
 			updated_configmap.Labels = copied_configmap.Labels
-			log.Infof("Updating [resource=configmap][ns=%v][name=%v] to %v namespace...\n", configmap.Namespace, configmap.Name, namespace)
+			log.Infof("Updating [resource=configmap][ns=%v][name=%v] to %v namespace...", configmap.Namespace, configmap.Name, namespace)
 			_, err := clientSet.CoreV1().ConfigMaps(namespace).Update(context.TODO(), updated_configmap, metav1.UpdateOptions{})
 			if err != nil {
 				panic(err.Error())

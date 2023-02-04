@@ -149,7 +149,7 @@ func replicateSecretToNamespace(clientSet *kubernetes.Clientset, secret v1.Secre
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Create secret if it does not exist
-			log.Infof("Replicating [resource=secret][ns=%v][name=%v] to %v namespace...\n", secret.Namespace, secret.Name, namespace)
+			log.Infof("Replicating [resource=secret][ns=%v][name=%v] to %v namespace...", secret.Namespace, secret.Name, namespace)
 			_, err := clientSet.CoreV1().Secrets(namespace).Create(context.TODO(), copied_secret, metav1.CreateOptions{})
 			if err != nil {
 				panic(err.Error())
@@ -166,7 +166,7 @@ func replicateSecretToNamespace(clientSet *kubernetes.Clientset, secret v1.Secre
 			updated_secret.Annotations = copied_secret.Annotations
 			updated_secret.Data = copied_secret.Data
 			updated_secret.Labels = copied_secret.Labels
-			log.Infof("Updating [resource=secret][ns=%v][name=%v] to %v namespace...\n", secret.Namespace, secret.Name, namespace)
+			log.Infof("Updating [resource=secret][ns=%v][name=%v] to %v namespace...", secret.Namespace, secret.Name, namespace)
 			_, err := clientSet.CoreV1().Secrets(namespace).Update(context.TODO(), updated_secret, metav1.UpdateOptions{})
 			if err != nil {
 				panic(err.Error())

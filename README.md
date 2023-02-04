@@ -5,6 +5,14 @@ This package is written as a practice for writing golang applications. It heavil
 
 Instead of being a kubernetes controller, this will be more like a running process that endlessly loops and watches for changes in 
 
+## Deployment
+
+Deployment requires `cluster-admin` role as the program requires clusterRoles to list resources from all namespaces.
+
+```sh
+kubectl apply -f ./deployment.yaml
+```
+
 ## Implementation
 
 Every `CONFIG_LOOP_DURATION` duration, this application checks for all secrets and configmaps with the `resource-replicator/replicate-to` or `resource-replicator/all-namespaces` annotation, and replicates it to the intended namespaces. It will also ensure that the secret/configmap data is the same as the source (i.e. when you change the value of the source secret/configmap it will propagate the change to all the replicated resources).
@@ -15,7 +23,6 @@ Below is a table of available configurations:
 |--------------|-----------|------------|---------|
 | loop duration | CONFIG_LOOP_DURATION      | 10s        | duration string which defines how often namespaces are checked, see https://golang.org/pkg/time/#ParseDuration for more examples
 | debug logs | CONFIG_DEBUG      | false        | show debug logs
-
 
 ## Usage
 

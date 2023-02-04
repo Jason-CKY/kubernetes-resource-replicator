@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -29,8 +30,10 @@ const (
 
 func getKubernetesConfig() *rest.Config {
 	var config *rest.Config
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig := filepath.Join(home, ".kube", "config")
+	home := homedir.HomeDir()
+	kubeconfig := filepath.Join(home, ".kube", "config")
+	if _, err := os.Stat(kubeconfig); err == nil {
+		// if $HOME/.kube/config file exists
 		log.Infof("Using kubeconfig file at %v", kubeconfig)
 		// use the current context in kubeconfig
 		_config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
