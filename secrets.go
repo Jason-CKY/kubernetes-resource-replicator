@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	"github.com/google/go-cmp/cmp"
 	log "github.com/sirupsen/logrus"
@@ -98,31 +96,6 @@ func getSourceAndReplicatedSecrets(allSecrets *v1.SecretList, allNamespaces *v1.
 	return sourceSecrets, replicatedSecrets
 }
 
-// Evaluate the regex in annotation and return a list of all namespaces that secret is needed to replicate to
-func getReplicateNamespaces(allNamespaces *v1.NamespaceList, obj metav1.ObjectMeta) ([]string, error) {
-	output := make([]string, 0, 10)
-	if metav1.HasAnnotation(obj, REPLICATE_REGEX) {
-		// evaluate the regex on the namespace
-		// append the names of the matched namespaces to output
-		patterns := strings.Split(obj.Annotations[REPLICATE_REGEX], ",")
-		for _, pattern := range patterns {
-			namespaces := getAllRegexNamespaces(allNamespaces, pattern)
-			for _, namespace := range namespaces {
-				output = append(output, namespace.Name)
-			}
-		}
-	} else if metav1.HasAnnotation(obj, REPLICATE_ALL_NAMESPACES) {
-		// set output to all namespaces
-		for _, namespace := range allNamespaces.Items {
-			output = append(output, namespace.Name)
-		}
-	} else {
-		return output, fmt.Errorf("neither %v or %v annotation found in secret [namespace=%v][name=%v]", REPLICATE_REGEX, REPLICATE_ALL_NAMESPACES, obj.Namespace, obj.Name)
-	}
-
-	return output[:], nil
-}
-
 // Get secret in array of SourceSecrets, error if not found or the replicatedSecret Namespace is no longer valid to be replicated into (i.e. regex changed in the source secret).
 // Used to search for the source secret given a replicated one.
 func getSecretInSourceSecrets(replicatedSecret ReplicatedSecret, sourceSecrets []SourceSecret) (v1.Secret, error) {
@@ -204,16 +177,6 @@ func checkSecretEquality(originalSecret v1.Secret, replicatedSecret v1.Secret) b
 	return cmp.Equal(originalSecret.Data, replicatedSecret.Data) &&
 		cmp.Equal(originalAnnotation, replicatedAnnotation) &&
 		cmp.Equal(originalSecret.Labels, replicatedSecret.Labels)
-}
-
-// remove all replicator annotations for resource comparison
-func stripAllReplicatorAnnotations(annotation map[string]string) map[string]string {
-	copied_annotation := copyAnnotations(annotation)
-	delete(copied_annotation, REPLICATE_REGEX)
-	delete(copied_annotation, REPLICATED_ANNOTATION)
-	delete(copied_annotation, REPLICATE_ALL_NAMESPACES)
-	delete(copied_annotation, LAST_APPLIED_CONFIGURATION)
-	return copied_annotation
 }
 
 // deletes secret

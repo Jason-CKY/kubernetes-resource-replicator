@@ -76,6 +76,7 @@ func main() {
 		log.Info("Checking...")
 		allNamespaces := getAllNamespaces(clientSet)
 		processSecrets(clientSet, allNamespaces)
+		processConfigmaps(clientSet, allNamespaces)
 		log.Debug("Finished one loop")
 		time.Sleep(configLoopDuration)
 	}
