@@ -10,72 +10,65 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 )
 
-// list all secrets and filter by annotation
-// return all secrets with the REPLICATE_REGEX or REPLICATE_ALL_NAMESPACES annotation
-func getAllSourceSecrets(clientSet *kubernetes.Clientset) *v1.SecretList {
-	allSecrets, err := clientSet.CoreV1().Secrets("").List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		panic(err.Error())
-	}
-	secrets := v1.SecretList{}
-
-	for i := 0; i < len(allSecrets.Items); i++ {
-		secret := allSecrets.Items[i]
-		if metav1.HasAnnotation(secret.ObjectMeta, REPLICATE_REGEX) || metav1.HasAnnotation(secret.ObjectMeta, REPLICATE_ALL_NAMESPACES) {
-			secrets.Items = append(secrets.Items, secret)
-		}
-	}
-	return &secrets
-}
-
-// list all secrets and filter by annotation
-// return all secrets with the REPLICATED_ANNOTATION annotation
-func getAllReplicatedSecrets(clientSet *kubernetes.Clientset) *v1.SecretList {
-	allSecrets, err := clientSet.CoreV1().Secrets("").List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		panic(err.Error())
-	}
-	secrets := v1.SecretList{}
-
-	for i := 0; i < len(allSecrets.Items); i++ {
-		secret := allSecrets.Items[i]
-		if metav1.HasAnnotation(secret.ObjectMeta, REPLICATED_ANNOTATION) {
-			secrets.Items = append(secrets.Items, secret)
-		}
-	}
-	return &secrets
-}
+//TODO: fuction that takes in all secrets and returns a list of source Secrets and a list of replicatedSecrets
 
 // Evaluate the regex in annotation and return a list of all namespaces that secret is needed to replicate to
-func getReplicateNamespaces(clientSet *kubernetes.Clientset, obj metav1.ObjectMeta) ([]string, error) {
+func getReplicateNamespaces(allNamespaces *v1.NamespaceList, obj metav1.ObjectMeta) ([]string, error) {
 	output := make([]string, 0, 10)
 	if metav1.HasAnnotation(obj, REPLICATE_REGEX) {
 		// evaluate the regex on the namespace
 		// append the names of the matched namespaces to output
 		patterns := strings.Split(obj.Annotations[REPLICATE_REGEX], ",")
 		for _, pattern := range patterns {
-			namespaces := getAllRegexNamespaces(clientSet, pattern)
+			namespaces := getAllRegexNamespaces(allNamespaces, pattern)
 			for _, namespace := range namespaces {
 				output = append(output, namespace.Name)
 			}
 		}
 	} else if metav1.HasAnnotation(obj, REPLICATE_ALL_NAMESPACES) {
 		// set output to all namespaces
-		namespaces := getAllNamespaces(clientSet)
-		for _, namespace := range namespaces.Items {
+		for _, namespace := range allNamespaces.Items {
 			output = append(output, namespace.Name)
 		}
 	} else {
-		return output, fmt.Errorf("neither %v or %v annotation found in resource", REPLICATE_REGEX, REPLICATE_ALL_NAMESPACES)
+		return output, fmt.Errorf("neither %v or %v annotation found in secret [namespace=%v][name=%v]", REPLICATE_REGEX, REPLICATE_ALL_NAMESPACES, obj.Namespace, obj.Name)
 	}
 
 	return output[:], nil
 }
 
-func replicateSecretToNamespace(clientSet *kubernetes.Clientset, secret v1.Secret, namespace string) {
+// Get secret in array of SourceSecrets, error if not found
+func getSecretInSourceSecrets(replicatedSecret ReplicatedSecret, sourceSecrets []SourceSecret) (*v1.Secret, error) {
+	for _, sourceSecret := range sourceSecrets {
+		if sourceSecret.secret.Name == replicatedSecret.secret.Name &&
+			replicatedSecret.sourceNamespace == sourceSecret.secret.Namespace &&
+			arrayContains(sourceSecret.targetNamespaces, replicatedSecret.secret.Namespace) {
+			return &sourceSecret.secret, nil
+		}
+	}
+	return &v1.Secret{}, errors.NewNotFound(schema.GroupResource{}, "")
+}
+
+func getSecretInReplicatedSecrets(secret v1.Secret, replicatedSecrets []ReplicatedSecret, namespace string) (*v1.Secret, error) {
+	for _, replicatedSecret := range replicatedSecrets {
+		if replicatedSecret.secret.Name == secret.Name &&
+			replicatedSecret.sourceNamespace == secret.Namespace &&
+			replicatedSecret.secret.Namespace == namespace {
+			return &replicatedSecret.secret, nil
+		}
+	}
+	return &v1.Secret{}, errors.NewNotFound(schema.GroupResource{}, "")
+}
+
+func replicateSecretToNamespace(clientSet *kubernetes.Clientset, secret v1.Secret, namespace string, replicatedSecrets []ReplicatedSecret) {
+
+	if namespace == secret.Namespace {
+		return
+	}
 	// Remove annotation
 	copied_secret := secret.DeepCopy()
 	delete(copied_secret.Annotations, REPLICATE_REGEX)
@@ -84,31 +77,32 @@ func replicateSecretToNamespace(clientSet *kubernetes.Clientset, secret v1.Secre
 	copied_secret.Annotations[REPLICATED_ANNOTATION] = secret.Namespace
 	copied_secret.Namespace = namespace
 	copied_secret.ResourceVersion = ""
-	_, err := clientSet.CoreV1().Secrets(namespace).Create(context.TODO(), copied_secret, metav1.CreateOptions{})
+
+	existing_secret, err := getSecretInReplicatedSecrets(secret, replicatedSecrets, namespace)
 	if err != nil {
-		if errors.IsAlreadyExists(err) {
-			// checks if secret is the same
-			existing_secret, err := clientSet.CoreV1().Secrets(namespace).Get(context.TODO(), secret.Name, metav1.GetOptions{})
+		if errors.IsNotFound(err) {
+			log.Infof("Replicating [resource=secret][ns=%v][name=%v] to %v namespace...\n", secret.Namespace, secret.Name, namespace)
+			_, err := clientSet.CoreV1().Secrets(namespace).Create(context.TODO(), copied_secret, metav1.CreateOptions{})
 			if err != nil {
 				panic(err.Error())
 			}
-			if !checkSecretEquality(copied_secret, existing_secret) {
-				// updates secret
-				updated_secret := existing_secret.DeepCopy()
-				updated_secret.Annotations = copied_secret.Annotations
-				updated_secret.Data = copied_secret.Data
-				updated_secret.Labels = copied_secret.Labels
-				_, err := clientSet.CoreV1().Secrets(namespace).Update(context.TODO(), updated_secret, metav1.UpdateOptions{})
-				if err != nil {
-					panic(err.Error())
-				}
-				log.Infof("Updating [resource=secret][ns=%v][name=%v] to %v namespace...\n", secret.Namespace, secret.Name, namespace)
-			}
 		} else {
+			log.Info(errors.IsNotFound(err))
 			panic(err.Error())
 		}
 	} else {
-		log.Infof("Replicating [resource=secret][ns=%v][name=%v] to %v namespace...\n", secret.Namespace, secret.Name, namespace)
+		if !checkSecretEquality(copied_secret, existing_secret) {
+			// updates secret
+			updated_secret := existing_secret.DeepCopy()
+			updated_secret.Annotations = copied_secret.Annotations
+			updated_secret.Data = copied_secret.Data
+			updated_secret.Labels = copied_secret.Labels
+			log.Infof("Updating [resource=secret][ns=%v][name=%v] to %v namespace...\n", secret.Namespace, secret.Name, namespace)
+			_, err := clientSet.CoreV1().Secrets(namespace).Update(context.TODO(), updated_secret, metav1.UpdateOptions{})
+			if err != nil {
+				panic(err.Error())
+			}
+		}
 	}
 }
 

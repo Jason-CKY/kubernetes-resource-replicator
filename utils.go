@@ -44,13 +44,9 @@ func getAllNamespaces(clientSet *kubernetes.Clientset) *v1.NamespaceList {
 	return namespaces
 }
 
-func getAllRegexNamespaces(clientSet *kubernetes.Clientset, pattern string) []v1.Namespace {
+func getAllRegexNamespaces(namespaces *v1.NamespaceList, pattern string) []v1.Namespace {
 	// match with regex
 	matchedNamespaces := make([]v1.Namespace, 0, 10)
-	namespaces, err := clientSet.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		panic(err.Error())
-	}
 	for _, namespace := range namespaces.Items {
 		matched, err := regexp.MatchString(pattern, namespace.Name)
 		if err != nil {
@@ -71,4 +67,14 @@ func copyAnnotations(annotation map[string]string) map[string]string {
 		copiedAnnotation[k] = v
 	}
 	return copiedAnnotation
+}
+
+// fuction to check given string is in array or not
+func arrayContains[T comparable](s []T, e T) bool {
+	for _, v := range s {
+		if v == e {
+			return true
+		}
+	}
+	return false
 }
