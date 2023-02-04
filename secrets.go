@@ -35,7 +35,7 @@ func processSecrets(clientSet *kubernetes.Clientset, allNamespaces *v1.Namespace
 	for _, sourceSecret := range sourceSecrets {
 		// replicate to all relevant namespaces
 		for _, replicateNamespace := range sourceSecret.targetNamespaces {
-			replicateSecretToNamespace(clientSet, sourceSecret.secret, replicateNamespace, replicatedSecrets)
+			go replicateSecretToNamespace(clientSet, sourceSecret.secret, replicateNamespace, replicatedSecrets)
 		}
 		log.Debugf("Finished replicating all namespaces for secret %v", sourceSecret.secret.Name)
 	}
@@ -46,7 +46,7 @@ func processSecrets(clientSet *kubernetes.Clientset, allNamespaces *v1.Namespace
 		_, err := getSecretInSourceSecrets(replicatedSecret, sourceSecrets)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				deleteSecret(clientSet, replicatedSecret.secret)
+				go deleteSecret(clientSet, replicatedSecret.secret)
 			} else {
 				panic(err.Error())
 			}

@@ -35,7 +35,7 @@ func processConfigmaps(clientSet *kubernetes.Clientset, allNamespaces *v1.Namesp
 	for _, sourceConfigmap := range sourceConfigmaps {
 		// replicate to all relevant namespaces
 		for _, replicateNamespace := range sourceConfigmap.targetNamespaces {
-			replicateConfigmapToNamespace(clientSet, sourceConfigmap.configmap, replicateNamespace, replicatedConfigmaps)
+			go replicateConfigmapToNamespace(clientSet, sourceConfigmap.configmap, replicateNamespace, replicatedConfigmaps)
 		}
 		log.Debugf("Finished replicating all namespaces for configmap %v", sourceConfigmap.configmap.Name)
 	}
@@ -46,7 +46,7 @@ func processConfigmaps(clientSet *kubernetes.Clientset, allNamespaces *v1.Namesp
 		_, err := getConfigmapInSourceConfigmaps(replicatedConfigmap, sourceConfigmaps)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				deleteConfigmap(clientSet, replicatedConfigmap.configmap)
+				go deleteConfigmap(clientSet, replicatedConfigmap.configmap)
 			} else {
 				panic(err.Error())
 			}
