@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sync"
 
 	"github.com/google/go-cmp/cmp"
 	log "github.com/sirupsen/logrus"
@@ -25,7 +26,9 @@ type ReplicatedConfigmap struct {
 // function to list all namespaces and source configmaps and replicate them to the relevant namespaces
 // also scans and deletes any orphaned configmaps.
 // It is optimized by only querying once for the list of source configmaps, replicated configmaps, and namespaces to be replicated to
-func processConfigmaps(clientSet *kubernetes.Clientset, allNamespaces *v1.NamespaceList) {
+func processConfigmaps(clientSet *kubernetes.Clientset, allNamespaces *v1.NamespaceList, wg *sync.WaitGroup) {
+	defer wg.Done()
+	var cm_wg sync.WaitGroup
 	// Get all configmaps
 	allConfigmaps := getAllConfigmaps(clientSet)
 	sourceConfigmaps, replicatedConfigmaps := getSourceAndReplicatedConfigmaps(allConfigmaps, allNamespaces)
@@ -35,7 +38,8 @@ func processConfigmaps(clientSet *kubernetes.Clientset, allNamespaces *v1.Namesp
 	for _, sourceConfigmap := range sourceConfigmaps {
 		// replicate to all relevant namespaces
 		for _, replicateNamespace := range sourceConfigmap.targetNamespaces {
-			go replicateConfigmapToNamespace(clientSet, sourceConfigmap.configmap, replicateNamespace, replicatedConfigmaps)
+			cm_wg.Add(1)
+			go replicateConfigmapToNamespace(clientSet, sourceConfigmap.configmap, replicateNamespace, replicatedConfigmaps, &cm_wg)
 		}
 		log.Debugf("Finished replicating all namespaces for configmap %v", sourceConfigmap.configmap.Name)
 	}
@@ -46,12 +50,14 @@ func processConfigmaps(clientSet *kubernetes.Clientset, allNamespaces *v1.Namesp
 		_, err := getConfigmapInSourceConfigmaps(replicatedConfigmap, sourceConfigmaps)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				go deleteConfigmap(clientSet, replicatedConfigmap.configmap)
+				cm_wg.Add(1)
+				go deleteConfigmap(clientSet, replicatedConfigmap.configmap, &cm_wg)
 			} else {
 				panic(err.Error())
 			}
 		}
 	}
+	cm_wg.Wait()
 }
 
 // Get all configmaps from all namespaces
@@ -124,7 +130,8 @@ func getConfigmapInReplicatedConfigmaps(configmap v1.ConfigMap, replicatedConfig
 
 // Replicate source configmap to target namespace
 // Creates the replicate configmap if it does not exist, and update it if it exists and is not the same
-func replicateConfigmapToNamespace(clientSet *kubernetes.Clientset, configmap v1.ConfigMap, namespace string, replicatedConfigmaps []ReplicatedConfigmap) {
+func replicateConfigmapToNamespace(clientSet *kubernetes.Clientset, configmap v1.ConfigMap, namespace string, replicatedConfigmaps []ReplicatedConfigmap, wg *sync.WaitGroup) {
+	defer wg.Done()
 	// do nothing if the target namespace is the same as the source configmap namespace
 	if namespace == configmap.Namespace {
 		return
@@ -180,7 +187,8 @@ func checkConfigmapEquality(originalConfigmap v1.ConfigMap, replicatedConfigmap 
 }
 
 // deletes configmap
-func deleteConfigmap(clientSet *kubernetes.Clientset, configmap v1.ConfigMap) {
+func deleteConfigmap(clientSet *kubernetes.Clientset, configmap v1.ConfigMap, wg *sync.WaitGroup) {
+	defer wg.Done()
 	log.Infof("Deleting configmap %v in namespace %v...", configmap.Name, configmap.Namespace)
 	err := clientSet.CoreV1().ConfigMaps(configmap.Namespace).Delete(context.TODO(), configmap.Name, metav1.DeleteOptions{})
 	if err != nil {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sync"
 
 	"github.com/google/go-cmp/cmp"
 	log "github.com/sirupsen/logrus"
@@ -25,7 +26,9 @@ type ReplicatedSecret struct {
 // function to list all namespaces and source secrets and replicate them to the relevant namespaces
 // also scans and deletes any orphaned secrets.
 // It is optimized by only querying once for the list of source secrets, replicated secrets, and namespaces to be replicated to
-func processSecrets(clientSet *kubernetes.Clientset, allNamespaces *v1.NamespaceList) {
+func processSecrets(clientSet *kubernetes.Clientset, allNamespaces *v1.NamespaceList, wg *sync.WaitGroup) {
+	defer wg.Done()
+	var secrets_wg sync.WaitGroup
 	// Get all secrets
 	allSecrets := getAllSecrets(clientSet)
 	sourceSecrets, replicatedSecrets := getSourceAndReplicatedSecrets(allSecrets, allNamespaces)
@@ -35,7 +38,8 @@ func processSecrets(clientSet *kubernetes.Clientset, allNamespaces *v1.Namespace
 	for _, sourceSecret := range sourceSecrets {
 		// replicate to all relevant namespaces
 		for _, replicateNamespace := range sourceSecret.targetNamespaces {
-			go replicateSecretToNamespace(clientSet, sourceSecret.secret, replicateNamespace, replicatedSecrets)
+			secrets_wg.Add(1)
+			go replicateSecretToNamespace(clientSet, sourceSecret.secret, replicateNamespace, replicatedSecrets, &secrets_wg)
 		}
 		log.Debugf("Finished replicating all namespaces for secret %v", sourceSecret.secret.Name)
 	}
@@ -46,12 +50,14 @@ func processSecrets(clientSet *kubernetes.Clientset, allNamespaces *v1.Namespace
 		_, err := getSecretInSourceSecrets(replicatedSecret, sourceSecrets)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				go deleteSecret(clientSet, replicatedSecret.secret)
+				secrets_wg.Add(1)
+				go deleteSecret(clientSet, replicatedSecret.secret, &secrets_wg)
 			} else {
 				panic(err.Error())
 			}
 		}
 	}
+	secrets_wg.Wait()
 }
 
 // Get all secrets from all namespaces
@@ -124,7 +130,8 @@ func getSecretInReplicatedSecrets(secret v1.Secret, replicatedSecrets []Replicat
 
 // Replicate source secret to target namespace
 // Creates the replicate secret if it does not exist, and update it if it exists and is not the same
-func replicateSecretToNamespace(clientSet *kubernetes.Clientset, secret v1.Secret, namespace string, replicatedSecrets []ReplicatedSecret) {
+func replicateSecretToNamespace(clientSet *kubernetes.Clientset, secret v1.Secret, namespace string, replicatedSecrets []ReplicatedSecret, wg *sync.WaitGroup) {
+	defer wg.Done()
 	// do nothing if the target namespace is the same as the source secret namespace
 	if namespace == secret.Namespace {
 		return
@@ -180,7 +187,8 @@ func checkSecretEquality(originalSecret v1.Secret, replicatedSecret v1.Secret) b
 }
 
 // deletes secret
-func deleteSecret(clientSet *kubernetes.Clientset, secret v1.Secret) {
+func deleteSecret(clientSet *kubernetes.Clientset, secret v1.Secret, wg *sync.WaitGroup) {
+	defer wg.Done()
 	log.Infof("Deleting secret %v in namespace %v...", secret.Name, secret.Namespace)
 	err := clientSet.CoreV1().Secrets(secret.Namespace).Delete(context.TODO(), secret.Name, metav1.DeleteOptions{})
 	if err != nil {

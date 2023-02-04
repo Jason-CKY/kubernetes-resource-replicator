@@ -3,9 +3,11 @@ package main
 import (
 	"flag"
 	"path/filepath"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -75,8 +77,20 @@ func main() {
 	for {
 		log.Info("Checking...")
 		allNamespaces := getAllNamespaces(clientSet)
-		go processSecrets(clientSet, allNamespaces)
-		go processConfigmaps(clientSet, allNamespaces)
+		loop(clientSet, allNamespaces)
+		log.Debugf("End of loop!")
+
 		time.Sleep(configLoopDuration)
 	}
+}
+
+// main loop function that uses goroutines to process secrets and configmaps
+// includes waitGroup to block code execution until the loop function full completes.
+// This is to ensure the loop is fully executed before the loop delay is executed
+func loop(clientSet *kubernetes.Clientset, allNamespaces *v1.NamespaceList) {
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go processSecrets(clientSet, allNamespaces, &wg)
+	go processConfigmaps(clientSet, allNamespaces, &wg)
+	wg.Wait()
 }
